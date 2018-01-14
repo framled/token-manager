@@ -1,0 +1,237 @@
+<link rel="import" href="../polymer/polymer-element.html">
+
+<script>
+  // Globally expose base elements and mixins
+  window.BaseElements = window.BaseElements || {};
+  window.Mixins = window.Mixins || {};
+
+  tokenManager = {
+    path: null,
+    storage: null,
+    accessToken: null,
+    refresh: null,
+  }
+
+  Mixins.TokenManagerRead = (superClass) => class extends superClass {
+    /**
+     * return access token
+     *
+     * @return {string} return the token
+     */
+    getToken() {
+      if(tokenManager.storage) {
+        var value;
+        if (!tokenManager.path) {
+          try {
+            if (tokenManager.accessToken){
+              value = tokenManager.accessToken;
+            } else {
+              value = tokenManager.storage.getItem(tokenManager.path)
+            }
+          } catch (e) {
+            return Promise.reject(e);
+          }
+        }
+        return Promise.resolve(value);
+      }
+    }
+  }
+
+  class TokenManager extends Polymer.Element {
+    static get is() {
+      return 'token-manager';
+    }
+
+    static get properties() {
+      return {
+        /**
+         * If true, automatically performs an refresh when either `url` changes
+         * or token expire
+         */
+        auto: {
+          type: Boolean,
+          value: false,
+        },
+        /**
+         * access-token string
+         *
+         * @type{String}
+         */
+        accessToken: {
+          type: String,
+          observer: '_tokenChanged',
+        },
+        /**
+         * path for save the token in local or session storage
+         *
+         * @type{String}
+         */
+        path: {
+          type: String,
+          value: 'access_token',
+        },
+        /**
+         * Time token's expiration
+         *
+         * @type{Number}
+         */
+        expiration: {
+          type: Number,
+          value: 10000,
+        },
+
+        /**
+         * If true, the data will automatically be cleared from storage when the page session ends (i.e. when * the user has navigated away from the page).
+         *
+         * @type{Boolean}
+         */
+        sessionOnly: {
+          type: Boolean,
+          value: false,
+          observer: '_sessionOnlyChanged'
+        },
+      };
+    }
+
+    constructor() {
+      super();
+      this._createStorage();
+    }
+
+    ready() {
+      super.ready();
+    }
+
+    /**
+     * Fired when token was saved
+     *
+     * @event token-manager-saved
+     */
+
+    /**
+     * Fired when saving was failed
+     *
+     * @event token-manager-saved-failed
+     */
+
+    /**
+     * Fired when response from refresh function was failed
+     *
+     * @event token-manager-response-failed
+     */
+
+
+    setRefresh(fn) {
+      tokenManager.refresh = fn;
+    }
+
+    /**
+     * Make a ajax request to url, using body and/or params
+     * for refresh a new token
+     */
+    refresh() {
+      if(!tokenManager.refresh){
+        return Promise.reject(new Error('no refresh function, nothing to do'));
+      }
+      return tokenManager.refresh.call()
+        .then(function(accessToken) {
+          this.accessToken = accessToken;
+          return accessToken;
+        }.bind(this))
+        .then(function(accessToken) {
+          if(this.auto){
+            return new Promise(resolve => {
+              window.setTimeout(function() {
+                this.refresh(tokenManager.refresh);
+                return resolve();
+              }.bind(this), this.expiration)
+            });
+          }
+          return Promise.resolve();
+        }.bind(this));
+    }
+
+    /**
+     * clear token and refresh
+     */
+    expire() {
+      this.forget();
+      this.refresh();
+    }
+
+    /**
+     * delete token from local storage
+     */
+    forget() {
+      try {
+        tokenManager.storage.removeItem(this.path);
+        this.token = undefined;
+      } catch (e) {
+        return Promise.reject(e);
+      }
+      return Promise.resolve();
+    }
+
+    /**
+     * Set path for storage
+     * 
+     * @param {path}
+     */
+    set storagePath(path) {
+      if (!path) {
+        console.error(`no path to set, using default path ${tokanManager.path}`)
+        return;
+      }
+      
+      this.path = path;
+      tokenManager.path = path;
+    }
+
+    _tokenChanged(newToken, oldToken) {
+      tokenManager.token = newToken;
+      if(newToken){
+        this._save(newToken);
+      }
+    }
+
+    _createStorage(){
+      if(!tokenManager.storage){
+        tokenManager.storage = this.sessionOnly ? window.sessionStorage : window.localStorage;
+      }
+    }
+
+    /*
+     *
+     * save token 
+     */
+    _save(token) {
+      try {
+        tokenManager.storage.setItem(this.path, token);
+        this.dispatchEvent(new CustomEvent('token-manager-saved', {
+          detail: {
+            key: this.path,
+            token: token,
+          },
+          bubbles: true,
+          composed: true,
+        }));
+      } catch (e) {
+        this.dispatchEvent(new CustomEvent('token-manager-saved-failed', {
+          detail: {
+            error: e, 
+          },
+          bubbles: true,
+          composed: true,
+        }));
+        return Promise.reject(e);
+      }      
+      return Promise.resolve();
+    }
+
+    _sessionOnlyChanged(sessionOnly){
+      tokenManager.storage = null;
+      this._createStorage();
+    }
+  }
+  customElements.define(TokenManager.is, TokenManager);
+</script>

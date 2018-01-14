@@ -1,0 +1,98 @@
+<link rel="import" href="../polymer/polymer-element.html">
+<link rel="import" href="../iron-ajax/iron-ajax.html">
+<link rel="import" href="../iron-ajax/iron-request.html">
+<link rel="import" href="token-manager.html">
+
+<!--
+A comment describing this element
+
+Example:
+
+    <token-manager-ajax></token-manager-ajax>
+
+Example:
+    <token-manager></token-manager>
+    <token-manager-ajax auth-required></token-manager-ajax>>
+
+@demo demo/index.html
+-->
+
+
+<script>
+  const IronRequest = customElements.get('iron-request');
+  const IronAjax = customElements.get('iron-ajax');
+
+  class TokenManagerRequest extends IronRequest {
+
+    static get is() {
+      return 'token-manager-request';
+    }
+
+    constructor() {
+      super();
+    }
+
+    ready() {
+      super.ready();
+    }
+
+    send (requestOptions) {
+      if (requestOptions._authHandler) {
+        requestOptions._authHandler(this, requestOptions)
+          .then(function (requestOptions) {
+            super.send(this, requestOptions);
+          }.bind(this));
+      } else {
+        super.send(this, requestOptions);
+      }
+    }
+  }
+
+  class TokenManagerAjax extends Polymer.ElementMixin(Mixins.TokenManagerRead(Polymer.Element), IronAjax){
+
+    static get is () {
+        return 'token-manager-ajax';
+    }
+
+    static get properties () {
+      return {
+        authRequired: {
+          type: Boolean,
+          default: false
+        }
+      }
+    }
+
+    constructor() {
+        super();
+    }
+
+    ready() {
+        super.ready();
+    }
+
+    toRequestOptions() {
+      let requestOptions = super.toRequestOptions();
+      requestOptions._authHandler = this._authHandler.bind(this);
+      return requestOptions;
+    }
+
+    _authHandler(request, requestOptions) {
+      this.getToken()
+        .then(function (accessToken) {
+          requestOptions.headers.Authorization = $`Bearer ${accessToken}`;
+          return Promise.resolve(requestOptions);
+        }.bind(this))
+        .catch(function (reason) {
+          if (this.authRequired) {
+            this._handleError(request, new Error(reason));
+          } else {
+            return Promise.resolve(requestOptions);
+          }
+        }.bind(this))
+    }
+  }
+
+  customElements.define(TokenManagerAjax.is, TokenManagerAjax);
+  customElements.define(TokenManagerRequest.is, TokenManagerRequest);
+</script>

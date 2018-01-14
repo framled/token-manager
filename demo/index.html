@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, minimum-scale=1, initial-scale=1, user-scalable=yes">
+
+    <title>token-manager-behavior demo</title>
+
+    <script src="../../webcomponentsjs/webcomponents-lite.js"></script>
+
+    <link rel="import" href="../../iron-demo-helpers/demo-pages-shared-styles.html">
+    <link rel="import" href="../../iron-demo-helpers/demo-snippet.html">
+    <link rel="import" href="../token-manager.html">
+    <link rel="import" href="../../iron-ajax/iron-ajax.html">
+
+    <custom-style>
+      <style is="custom-style" include="demo-pages-shared-styles">
+      </style>
+    </custom-style>
+  </head>
+  <body>
+    <div class="vertical-section-container centered">
+      <h3>Basic token-manager-behavior demo</h3>
+      <demo-snippet>
+        <template>
+          <token-manager path='token' auto></token-manager>
+        </template>
+        <div class='layout horizontal'>
+        <button id="btn-refresh">refresh</button>
+        <button id="btn-forget">forget</button>
+      </div>
+      </demo-snippet>
+    </div>
+    <script>
+      const manager = document.querySelector('token-manager');
+      let ajax = null;
+      function refreshing() {
+        if(!ajax) {
+          ajax = document.createElement('iron-ajax');
+        }
+
+        ajax.url = 'demo.json';
+        ajax.body = {'token': 'secret'}
+        ajax.debounce = 5000;
+        const request = ajax.generateRequest();
+
+        return request.completes
+          .then(req => (
+            Promise.resolve(req.response.token)
+          ))
+          .catch((error) => {
+            console.log(error);
+          });
+      }
+      manager.setRefresh(refreshing);
+
+      const refresh = document.querySelector('#btn-refresh');
+      refresh.addEventListener('click', function(event) {
+        manager.refresh();
+      });
+      const forget = document.querySelector('#btn-forget');
+      forget.addEventListener('click', function(event) {
+        console.log('forgetting token');
+        manager.forget();
+      });
+    </script>
+  </body>
+</html>
